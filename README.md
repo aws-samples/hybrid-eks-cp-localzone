@@ -4,7 +4,7 @@ Amazon EKS data plane can be extended to be deployed in AWS Local Zones. In this
 
 To get started, you need to create an Amazon EKS control plane in an AWS Region. You can then add self-managed nodes to the Amazon EKS cluster that are located in the Local Zones. These nodes can be used to run Kubernetes pods that are designed to serve requests from users in the Local Zone.
 
-To ensure the pods are highly available, you can use Kubernetes' node affinity and anti-affinity features to ensure that pods are scheduled on nodes in different Local Zones. 
+To ensure the pods are highly available, you can use Kubernetes' node affinity and anti-affinity features to ensure that pods are scheduled on nodes in the Local Zone and back up pods are scheduled on nodes in the region. 
 
 By extending Amazon EKS data plane can be extended to AWS Local Zones, you can take advantage of the low-latency benefits of running your application in proximity to end-users while maintaining a centralized management plane for your EKS control plane.
 
@@ -413,9 +413,9 @@ Replace <aws-loadbalancer-controller-pod> with the full name of the AWS Load Bal
 
 >```bash
 >kubectl delete pods <aws-loadbalancer-controller-pod> -n kube-system
->`
+>```
 
-#### Optional Step 5: Configure Route 53 Failover for high availability
+#### Optional Step 5: Configure Route 53 failover for high availability
 
 Assuming you have a public domain defined under Amazon Route 53 [hosted zones](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/CreatingHostedZone.html), we have a complementary CloudFormation stack that can help you create [failover alias records values](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-failover.html), configure Amazon Route 53 [health checks](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html), and set up DNS failover.
 
