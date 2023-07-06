@@ -6,7 +6,7 @@ To get started, you need to create an Amazon EKS control plane in an AWS Region.
 
 To ensure the pods are highly available, you can use Kubernetes' node affinity and anti-affinity features to ensure that pods are scheduled on nodes in the Local Zone and back up pods are scheduled on nodes in the region. 
 
-By extending Amazon EKS data plane can be extended to AWS Local Zones, you can take advantage of the low-latency benefits of running your application in proximity to end-users while maintaining a centralized management plane for your EKS control plane.
+By extending Amazon EKS data plane to AWS Local Zones, you can take advantage of the low-latency benefits of running your application in proximity to end-users while maintaining a centralized management plane for your EKS control plane.
 
 When you are looking to understand how to design workloads that are stretched across AWS Region and Local Zones, this project presents a sample architecture. The project also shares complementary AWS CloudFormation that you can consider to improve operational and developer efficiency.
 
@@ -20,7 +20,7 @@ When you are looking to understand how to design workloads that are stretched ac
 
 This solution enable you to simplify and centralize the management of your infrastructure and applications on AWS Region and on AWS Local Zones. You can extend the AWS cloud operations experience across hybrid and Local Zones for secure and seamless management, compliance, and observability. AWS Hybrid Cloud Solutions enable you to deliver a consistent AWS experience wherever you need it—from the cloud, to the edge.
 
-To create a hybrid EKS cluster with a mix of managed and self-managed nodes, you can use CloudFormation samples to define and deploy the necessary infrastructure. Here's a high-level overview of the solution:
+To create an EKS cluster with a mix of managed and self-managed nodes, you can use CloudFormation samples to define and deploy the necessary infrastructure. Here's a high-level overview of the solution:
 
 - Define the VPC and Subnets
 - Deploy the EKS Cluster
