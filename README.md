@@ -231,7 +231,7 @@ kubectl get -n kube-system configmap/aws-auth -o yaml  > aws-auth-cm.yaml
 
 - Make sure the `rolearn` of the newly added group with the lz-nodes role is there as the following:
 
-![aws-auth-file](/static/lab3/authyaml.jpeg)
+![aws-auth-file](/assets/authyaml.jpeg)
 
 3. Watch the status of your nodes and wait for them to reach the Ready status.
 
@@ -241,7 +241,7 @@ kubectl get -n kube-system configmap/aws-auth -o yaml  > aws-auth-cm.yaml
 
 > To stop monitoring the status of nodes in a Kubernetes cluster using the "watch" command, you can press "Ctrl + C" when you observe that new node is in the "Ready" state. This will terminate the command and exit the watch mode.
 
-![auth2](/static/lab3/joined-self-managed.jpeg) 
+![auth2](/assets/joined-self-managed.jpeg) 
 
 >**Warning**
 > If you receive any authorization or resource type errors, see [Unauthorized or access denied (kubectl)](https://docs.amazonaws.cn/en_us/eks/latest/userguide/troubleshooting.html#unauthorized) and [further references](https://docs.amazonaws.cn/en_us/eks/latest/userguide/eks-outposts-self-managed-nodes.html) in the troubleshooting topic.
@@ -314,7 +314,7 @@ NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
 aws-load-balancer-controller   1/1     1            1          84s
 ```
 
-![cnt](/static/lab3/controller.jpeg) 
+![cnt](/assets/controller.jpeg) 
 
 #### Step 4: Deploy two sample application to the Region and to the Local Zones
 
@@ -359,7 +359,7 @@ aws-load-balancer-controller   1/1     1            1          84s
 
  5. To verify successful installation, open a browser and navigate to the ADDRESS URL from the previous commands output to see the sample application. If you don't see anything, refresh your browser and try again or [troubleshoot](https://repost.aws/knowledge-center/eks-load-balancer-webidentityerr) . 
 
- ![2048](/static/lab3/2048.png)
+ ![2048](/assets/2048.png)
 
 >**Note**
 >-   Kubernetes assigns the service its own IP address that is accessible only from within the cluster. To access the service from outside of your cluster, deploy the AWS Load Balancer Controller to load balance [application](https://docs.aws.amazon.com/eks/latest/userguide/sample-deployment.html) or network traffic to the service. 
@@ -456,9 +456,16 @@ then delete the CloudFormation stacks as the following:
 
 ```bash
 aws cloudformation delete-stack --stack-name eksctl-eks-cluster-addon-iamserviceaccount-kube-system-aws-load-balancer-controller
+aws cloudformation wait stack-delete-complete --stack-name eksctl-eks-cluster-addon-iamserviceaccount-kube-system-aws-load-balancer-controller
+
 aws cloudformation delete-stack --stack-name eks-route53-cfn-stack
+aws cloudformation wait stack-delete-complete --stack-name eks-route53-cfn-stack
+
 aws cloudformation delete-stack --stack-name eks-lz-nodes-cfn-stack
+aws cloudformation wait stack-delete-complete --stack-name eks-lz-nodes-cfn-stack
+
 aws cloudformation delete-stack --stack-name eks-cp-cfn-stack
+aws cloudformation wait stack-delete-complete --stack-name eks-cp-cfn-stack
 ```
 
 Then, go to the Cloudformation console and make sure the stacks were deleted. Lastly, delete created user, policy and role assumed.
