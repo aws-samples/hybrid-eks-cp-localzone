@@ -250,16 +250,16 @@ kubectl get -n kube-system configmap/aws-auth -o yaml  > aws-auth-cm.yaml
 
 1. Creating an AWS Identity and Access Management (IAM) OpenID Connect (OIDC) provider for your cluster.
 
-   Amazon EKS supports using OpenID Connect (OIDC) identity providers as a method to authenticate users to your cluster, further [details](https://docs.aws.amazon.com/eks/latest/userguide/authenticate-oidc-identity-provider.html)
+Amazon EKS supports using OpenID Connect (OIDC) identity providers as a method to authenticate users to your cluster, further [details](https://docs.aws.amazon.com/eks/latest/userguide/authenticate-oidc-identity-provider.html)
 
-   - Retrieve your cluster's OIDC provider ID and store it in a variable.
+  - Retrieve your cluster's OIDC provider ID and store it in a variable.
 
 ```bash
  oidc_id=$(aws eks describe-cluster --name eks-cluster --query "cluster.identity.oidc.issuer" --output text | cut -d '/' -f 5)
  account_id=$(aws sts get-caller-identity --query Account --output text)
 ```
 
-   - Create an IAM OIDC identity provider for your cluster with the following command.
+  - Create an IAM OIDC identity provider for your cluster with the following command.
 
 ```bash
  eksctl utils associate-iam-oidc-provider --cluster eks-cluster --approve
@@ -267,7 +267,7 @@ kubectl get -n kube-system configmap/aws-auth -o yaml  > aws-auth-cm.yaml
 
 2. Deploy the AWS Load Balancer Controller to an Amazon EKS cluster
 
-   - Create an IAM policy using the policy downloaded in the previous step.
+  - Create an IAM policy using the policy downloaded in the previous step.
 
 ```bash
  curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.4.7/docs/install/iam_policy.json
@@ -402,7 +402,7 @@ In addition, we need you to input the LZ DNS name. This should correspond to the
 
 Similarly, we need the backup DNS name. This should correspond to the ingress resource address we created in the previous step for `ingress/ingress-2048-backup`. The backup DNS name will serve as the backup failover record set. Remember to include a period (.) at the end of the backup DNS name as well.
 
-By providing these inputs <myhostZoneId>,<mydomain.com>,<PDNS> and <SDNS> accurately, you can proceed with creating the CloudFormation stack to set up the failover alias records, configure health checks, and enable DNS failover for your domain.
+By providing these inputs **myhostZoneId,mydomain.com,PDNS and SDNS** accurately, you can proceed with creating the CloudFormation stack to set up the failover alias records, configure health checks, and enable DNS failover for your domain.
 
 ```bash
 HostedZoneId=<myhostZoneId>
@@ -442,7 +442,7 @@ while true; do response=$(curl -s -o /dev/null -w "%{http_code}" -m 2 $GAME_URL)
 
 To terminate the resources that we created in this sample, as the following:
 
-- Detach polices from created roles **eks-lz-nodes-cfn-stack-NodeInstanceRole**-XXXXXX, **eks-cp-cfn-stack-WorkerNodesRole**-YYYYYY and **eks-cp-cfn-stack-ControlPlaneRole**-ZZZZZZ
+- Detach polices from created roles **eks-lz-nodes-cfn-stack-NodeInstanceRole**-XXXXXX, **eks-cp-cfn-stack-WorkerNodesRole**-YYYYYY and **eks-cp-cfn-stack-ControlPlaneRole**-ZZZZZZ.
 
 - Run the following: 
 
@@ -469,6 +469,8 @@ aws cloudformation wait stack-delete-complete --stack-name eks-cp-cfn-stack
 ```
 
 Then, go to the Cloudformation console and make sure the stacks were deleted. Lastly, delete created user, policy and role assumed.
+
+- Delete `AWSLoadBalancerControllerIAMPolicy` policy.
 
 ## Conclusion 
 
