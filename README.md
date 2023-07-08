@@ -77,7 +77,15 @@ mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$P
 echo 'export PATH=$PATH:$HOME/bin' >~/.bash_profile
 kubectl version --short --client
 
-#create an EC2 key pair [optional], if you decided to use existing one please make sure to update the CloudFormation parameter KeyPairName-
+# Install jq
+sudo yum install -y jq
+
+# Install helm
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+
+# Create an EC2 key pair [optional], if you decided to use existing one please make sure to update the CloudFormation parameter KeyPairName-
 aws ec2 create-key-pair --key-name eks-keypair --region us-west-2 --query 'KeyMaterial' --output text > MyKeyPair.pem
 ```
 - To assume role, using AWS Identity and Access Management (AWS IAM) Role, the following commands help to assume role as you need to configure IAM user `hybrid-eks-user` policy, update role `hybrid-eks-user-role` trust policy then assume role.
@@ -133,17 +141,13 @@ aws configure
 
 ```bash
 # assume role
-aws sts assume-role --role-arn "arn:aws:iam::$account_id:role/hybrid-eks-user-role" --role-session-name currentsession
-```
-
-- Replace export values from the assume role command results 
-
-```bash
-
-#replace export values from the assume role command results 
-export AWS_ACCESS_KEY_ID=<AAAA>
-export AWS_SECRET_ACCESS_KEY=<BBBB>
-export AWS_SESSION_TOKEN=<CCCC>
+role_arn=arn:aws:iam::$account_id:role/hybrid-eks-user-role
+credentials=$(aws sts assume-role --duration-seconds 3600 --role-arn $role_arn --role-session-name eks)
+# Set the AWS credentials as environment variables
+export AWS_ACCESS_KEY_ID=$(echo "$credentials" | jq -r '.Credentials.AccessKeyId')
+export AWS_SECRET_ACCESS_KEY=$(echo "$credentials" | jq -r '.Credentials.SecretAccessKey')
+export AWS_SESSION_TOKEN=$(echo "$credentials" | jq -r '.Credentials.SessionToken')
+export AWS_EXPIRATION=$(echo "$credentials" | jq -r '.Credentials.Expiration')
 ```
 
 - Opt-in for `us-west-2-lax-1a` Local Zone that this sample will create and run some workloads in. Please refer to the docs [here](https://docs.aws.amazon.com/local-zones/latest/ug/getting-started.html#getting-started-find-local-zone) to enable LAX Local Zone, Region `us-west-2`.
@@ -160,6 +164,7 @@ export AWS_SESSION_TOKEN=<CCCC>
   --template-body file://eks-cluster.yaml \
   --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
   --parameters ParameterKey=EKSClusterName,ParameterValue=eks-cluster ParameterKey=NumWorkerNodes,ParameterValue=2  ParameterKey=KeyPairName,ParameterValue=eks-keypair ParameterKey=Region,ParameterValue=us-west-2 ParameterKey=LocalZones,ParameterValue=us-west-2-lax-1a
+ aws cloudformation wait stack-create-complete --stack-name eks-cp-cfn-stack
 ```
 
 > When you observe the `StackId` prompt appearing in your terminal, it indicates that the execution of your CloudFormation has been initiated successfully. This prompt serves as a confirmation that your CloudFormation stack has started to execute.
@@ -178,27 +183,25 @@ aws eks update-kubeconfig \
             --region us-west-2 \
             --name eks-cluster 
 
-#Copy and paste the Amazon IAM Authenticator configuration map details to aws-auth-cm.yaml 
-kubectl get -n kube-system configmap/aws-auth -o yaml  > aws-auth-cm.yaml
-
 #Fetch required resources generated through the previous step
-ClusterControlPlaneSecurityGroup=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`EKSClusterSG`].OutputValue' --output text)
+cluster_cp_security_group=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`EKSClusterSG`].OutputValue' --output text)
 
-KeyName=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`KeyPair`].OutputValue' --output text)
+key_name=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`KeyPair`].OutputValue' --output text)
 
-Subnets=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`LZPrivateSubnetId`].OutputValue' --output text)
+subnets=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`LZPrivateSubnetId`].OutputValue' --output text)
 
-VpcId=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
+vpc=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
 ```
 
 - Create the self-managed nodes
 
 ```bash
- aws cloudformation create-stack \
+aws cloudformation create-stack \
   --stack-name eks-lz-nodes-cfn-stack \
   --template-body file://eks-selfmanaged-node.yaml \
   --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-  --parameters ParameterKey=ClusterName,ParameterValue=eks-cluster ParameterKey=ClusterControlPlaneSecurityGroup,ParameterValue=$ClusterControlPlaneSecurityGroup  ParameterKey=KeyName,ParameterValue=$KeyName ParameterKey=Subnets,ParameterValue=$Subnets ParameterKey=VpcId,ParameterValue=$VpcId ParameterKey=NodeGroupName,ParameterValue=eks-selfmanaged-groupnode ParameterKey=NodeImageId,ParameterValue=ami-0b149b4c68ab69dce
+  --parameters ParameterKey=ClusterName,ParameterValue=eks-cluster ParameterKey=ClusterControlPlaneSecurityGroup,ParameterValue=$cluster_cp_security_group  ParameterKey=KeyName,ParameterValue=$key_name ParameterKey=Subnets,ParameterValue=$subnets ParameterKey=VpcId,ParameterValue=$vpc ParameterKey=NodeGroupName,ParameterValue=eks-selfmanaged-groupnode ParameterKey=NodeImageId,ParameterValue=ami-0b149b4c68ab69dce
+aws cloudformation wait stack-create-complete --stack-name eks-lz-nodes-cfn-stack
 ```
 
 >**Note**
@@ -208,30 +211,29 @@ VpcId=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --reg
 
 - Enable self-managed nodes to join your cluster, as the following: 
 
-1. Get the self-manged nodes role.
+1. Map the newly added `rolearn` to the EKS cluster and apply the configuration to Amazon IAM Authenticator configuration map using the following commands. This process may take a few minutes to complete.
 
 ```bash
- echo $(aws cloudformation describe-stacks --stack-name "eks-lz-nodes-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`NodeInstanceRole`].OutputValue' --output text)
+ lz_node_role=$(aws cloudformation describe-stacks --stack-name "eks-lz-nodes-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`NodeInstanceRole`].OutputValue' --output text)
+
+ eksctl create iamidentitymapping --cluster eks-cluster --region=us-west-2 --arn $lz_node_role --group system:bootstrappers --group system:nodes --username "system:node:{{EC2PrivateDNSName}}"
 ```
 
- ![role](/assets/role.jpeg)
+2. Verify the Amazon IAM Authenticator configuration map details
 
-2. Open the aws-auth-cm.yaml file in the left panel of your Cloud9 IDE.
-3. Copy the existing `groups` node and paste it as an additional tag.
-4. Set the `rolearn` of the newly added group to the value that you recorded in the previous procedure. Be sure to change the role ARN and **avoid any alignment** issues.
-
-![aws-auth-file](/assets/authyaml.jpeg)
-
-5. Verify that both groups have the same **alignment** and **save** the file before proceeding to the next step.
-6. Apply the configuration using the appropriate command. This process may take a few minutes to complete.
+- Get authenticator configuration map details
 
 ```bash
- kubectl apply -f aws-auth-cm.yaml
+kubectl get -n kube-system configmap/aws-auth -o yaml  > aws-auth-cm.yaml 
 ```
 
- ![auth](/assets/join-self-managed.jpeg) 
+- Open the aws-auth-cm.yaml file in the left panel of your Cloud9 IDE.
 
-7. Watch the status of your nodes and wait for them to reach the Ready status.
+- Make sure the `rolearn` of the newly added group with the lz-nodes role is there as the following:
+
+![aws-auth-file](/static/lab3/authyaml.jpeg)
+
+3. Watch the status of your nodes and wait for them to reach the Ready status.
 
 ```bash
  kubectl get nodes --watch
@@ -239,14 +241,14 @@ VpcId=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --reg
 
 > To stop monitoring the status of nodes in a Kubernetes cluster using the "watch" command, you can press "Ctrl + C" when you observe that new node is in the "Ready" state. This will terminate the command and exit the watch mode.
 
-![auth2](/assets/joined-self-managed.jpeg) 
+![auth2](/static/lab3/joined-self-managed.jpeg) 
 
 >**Warning**
 > If you receive any authorization or resource type errors, see [Unauthorized or access denied (kubectl)](https://docs.amazonaws.cn/en_us/eks/latest/userguide/troubleshooting.html#unauthorized) and [further references](https://docs.amazonaws.cn/en_us/eks/latest/userguide/eks-outposts-self-managed-nodes.html) in the troubleshooting topic.
 
 #### Step 3: Installing the AWS Load Balancer Controller add-on
 
- 1. Creating an AWS Identity and Access Management (IAM) OpenID Connect (OIDC) provider for your cluster.
+1. Creating an AWS Identity and Access Management (IAM) OpenID Connect (OIDC) provider for your cluster.
 
    Amazon EKS supports using OpenID Connect (OIDC) identity providers as a method to authenticate users to your cluster, further [details](https://docs.aws.amazon.com/eks/latest/userguide/authenticate-oidc-identity-provider.html)
 
@@ -263,7 +265,7 @@ VpcId=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --reg
  eksctl utils associate-iam-oidc-provider --cluster eks-cluster --approve
 ```
 
- 2. Deploy the AWS Load Balancer Controller to an Amazon EKS cluster
+2. Deploy the AWS Load Balancer Controller to an Amazon EKS cluster
 
    - Create an IAM policy using the policy downloaded in the previous step.
 
@@ -285,58 +287,20 @@ VpcId=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --reg
   --attach-policy-arn=arn:aws:iam::$account_id:policy/AWSLoadBalancerControllerIAMPolicy \
   --approve
  ```
-   - Install the AWS Load Balancer Controller by applying a Kubernetes manifest
+  - Install the AWS Load Balancer Controller, as the following:
 
 ```bash
-
- # Install cert-manager using one of the following methods to inject certificate configuration into the webhooks.
- kubectl apply \
-    --validate=false \
-    -f https://github.com/jetstack/cert-manager/releases/download/v1.5.4/cert-manager.yaml
-
- # Download the controller specification. 
-curl -Lo v2_4_7_full.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.4.7/v2_4_7_full.yaml
-
- #Make the following edits to the file.
-sed -i.bak -e '561,569d' ./v2_4_7_full.yaml
-sed -i.bak -e 's|your-cluster-name|eks-cluster|' ./v2_4_7_full.yaml
-
- # Download the IngressClass and IngressClassParams manifest to your cluster.
-curl -Lo v2_4_7_ingclass.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.4.7/v2_4_7_ingclass.yaml
+#Add the eks-charts repository.
+helm repo add eks https://aws.github.io/eks-charts
+#Update your local repo to make sure that you have the most recent charts.
+helm repo update eks
+#get vpcId
+vpc_id=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
+#Install the AWS Load Balancer Controller.
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller --set vpcId=$vpc_id --set region=us-west-2
 ```
 
-   * Retrieve the `VpcId` created in previous steps.
-
-```bash
- VpcId=$(aws cloudformation describe-stacks --stack-name "eks-cp-cfn-stack" --region "us-west-2" --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text)
- echo $VpcId
-```
-
-   * Open the v2_4_7_full.yaml file in the left panel of your Cloud9 IDE.
-   * Search for `args`.
-   * Add `aws-vpc-id` & `aws-region` to the containers' args.
-
-
-> **Warning** Replace `vpc-xxxxxxxx` with VpcId echo before updating the file with containers' args.
-
-
-```bash
-- --aws-vpc-id=vpc-xxxxxxxx
-- --aws-region=us-west-2
-```
-
-  * Verify that the added nodes have the same **alignment** and **save** the file before proceeding to the next step.
-
-      ![v2_4_4_full_file](/assets/containersargs.jpeg)
-
-   - Apply the file and the manifest to your cluster.
-
-```bash
- kubectl apply -f v2_4_7_full.yaml
- kubectl apply -f v2_4_7_ingclass.yaml
-```
-
-   - Verify that the controller is installed.
+- Verify that the controller is installed.
 
 ```bash
  kubectl get deployment -n kube-system aws-load-balancer-controller
@@ -350,10 +314,9 @@ NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
 aws-load-balancer-controller   1/1     1            1          84s
 ```
 
-![cnt](/assets/controller.jpeg) 
+![cnt](/static/lab3/controller.jpeg) 
 
 #### Step 4: Deploy two sample application to the Region and to the Local Zones
-
 
  1.  Deploy the game [2048](https://play2048.co/) as a sample application to verify that the AWS Load Balancer Controller creates an AWS ALB as a result of the ingress object or use the sample games configured along the nodeAffinity in this solution.
 
@@ -374,6 +337,10 @@ aws-load-balancer-controller   1/1     1            1          84s
  kubectl apply -f 2048_lz.yaml
 ```
 
+>**Note**
+>Open 2048_lz.yaml file and search for `nodeAffinity`, as you can see by setting up the affinity rules in the pod configuration using the nodeAffinity field, we specified that the pod should be scheduled only on nodes with the zone.
+
+
  4.  After a few minutes, verify that the ingress resource was created with the following command.
 
 ```bash
@@ -392,7 +359,7 @@ aws-load-balancer-controller   1/1     1            1          84s
 
  5. To verify successful installation, open a browser and navigate to the ADDRESS URL from the previous commands output to see the sample application. If you don't see anything, refresh your browser and try again or [troubleshoot](https://repost.aws/knowledge-center/eks-load-balancer-webidentityerr) . 
 
- ![2048](/assets/2048.png)
+ ![2048](/static/lab3/2048.png)
 
 >**Note**
 >-   Kubernetes assigns the service its own IP address that is accessible only from within the cluster. To access the service from outside of your cluster, deploy the AWS Load Balancer Controller to load balance [application](https://docs.aws.amazon.com/eks/latest/userguide/sample-deployment.html) or network traffic to the service. 
@@ -415,6 +382,16 @@ Replace <aws-loadbalancer-controller-pod> with the full name of the AWS Load Bal
 >kubectl delete pods <aws-loadbalancer-controller-pod> -n kube-system
 >```
 
+If this didn't work as well, you can use the kubectl describe command with the appropriate resource name, such as service or ingress, followed by the name of the load balancer controller. This command provides detailed information about the load balancer controller's configuration, status, and any associated events that may indicate issues or errors. Additionally, you can retrieve events to check the status.
+
+
+>```bash
+>kubectl describe deploy aws-load-balancer-controller -n kube-system | grep -i "Service Account"
+>kubectl get events -w
+>```
+
+> To stop monitoring the status of events in a Kubernetes cluster using the "watch" command, you can press "Ctrl + C". This will terminate the command and exit the watch mode.
+
 #### Optional Step 5: Configure Route 53 failover for high availability
 
 Assuming you have a public domain defined under Amazon Route 53 [hosted zones](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/CreatingHostedZone.html), we have a complementary CloudFormation stack that can help you create [failover alias records values](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-failover.html), configure Amazon Route 53 [health checks](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html), and set up DNS failover.
@@ -425,11 +402,41 @@ In addition, we need you to input the LZ DNS name. This should correspond to the
 
 Similarly, we need the backup DNS name. This should correspond to the ingress resource address we created in the previous step for `ingress/ingress-2048-backup`. The backup DNS name will serve as the backup failover record set. Remember to include a period (.) at the end of the backup DNS name as well.
 
-By providing these inputs accurately, we can proceed with creating the CloudFormation stack to set up the failover alias records, configure health checks, and enable DNS failover for your domain.
+By providing these inputs <myhostZoneId>,<mydomain.com>,<PDNS> and <SDNS> accurately, you can proceed with creating the CloudFormation stack to set up the failover alias records, configure health checks, and enable DNS failover for your domain.
 
-For example, have a look at the following input params:
+```bash
+HostedZoneId=<myhostZoneId>
+DomainName=<mydomain.com>
+PrimaryALBDNS=<PDNS>
+SecondaryALBDNS=<SDNS>
 
-![Rout53](/assets/route53.jpeg)
+aws cloudformation create-stack \
+  --stack-name eks-route53-cfn-stack \
+  --template-body file://eks-route53.yaml \
+  --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+  --parameters ParameterKey=HostedZoneId,ParameterValue=$HostedZoneId ParameterKey=DomainName,ParameterValue=$DomainName  ParameterKey=PrimaryALBDNS,ParameterValue=$PrimaryALBDNS. ParameterKey=SecondaryALBDNS,ParameterValue=$SecondaryALBDNS.
+```
+
+Verify high availability deployment
+
+```bash 
+aws cloudformation wait stack-create-complete --stack-name eks-route53-cfn-stack
+GAME_URL=http://game.$DomainName
+echo $GAME_URL
+while true; do response=$(curl -s -o /dev/null -w "%{http_code}" -m 2 $GAME_URL); [ "$response" == "200" ] && echo "Webpage is responding OK" || echo "Webpage is not responding"; sleep 1; done
+```
+
+> To stop verification when the status is 'Webpage is not responding', you can press "Ctrl + C". This will terminate the command and exit the loop.
+
+Lastly, scale down the Local Zone's nodes so that you verify the back up game.
+
+```bash
+kubectl scale -n game-2048-lz deployment —replicas 0 deployment-2048-lz
+deployment.apps/deployment-2048-lz scaled
+
+#retest the game again!
+while true; do response=$(curl -s -o /dev/null -w "%{http_code}" -m 2 $GAME_URL); [ "$response" == "200" ] && echo "Webpage is responding OK" || echo "Webpage is not responding"; sleep 1; done
+```
 
 ## Clean up
 
@@ -440,16 +447,18 @@ To terminate the resources that we created in this sample, as the following:
 - Run the following: 
 
 ```bash
-
 kubectl delete -f 2048_backup.yaml
 kubectl delete -f 2048_lz.yaml
-kubectl delete -f v2_4_7_ingclass.yaml
+helm delete aws-load-balancer-controller -n kube-system
+```
 
+then delete the CloudFormation stacks as the following:
+
+```bash
 aws cloudformation delete-stack --stack-name eksctl-eks-cluster-addon-iamserviceaccount-kube-system-aws-load-balancer-controller
+aws cloudformation delete-stack --stack-name eks-route53-cfn-stack
 aws cloudformation delete-stack --stack-name eks-lz-nodes-cfn-stack
 aws cloudformation delete-stack --stack-name eks-cp-cfn-stack
-
-#delete the Route53 stack if you went through this step
 ```
 
 Then, go to the Cloudformation console and make sure the stacks were deleted. Lastly, delete created user, policy and role assumed.
