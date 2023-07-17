@@ -172,9 +172,9 @@ export AWS_EXPIRATION=$(echo "$credentials" | jq -r '.Credentials.Expiration')
 
 - Wait for 10-15 mins for the CloudFormation to create all resources "CREATE_COMPLETE" status for the stack.
 
-#### Step 2: Deploy and setup the self-managed nodes communication
+#### Step 2: Deploy and setup the self-managed node
 
-- Prepare the environment for Kubernetes and self-managed nodes communication
+- Prepare the environment for Kubernetes and self-managed node
 
     
 ```bash
