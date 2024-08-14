@@ -14,9 +14,7 @@ Parameters:
     Default: 2
   WorkerNodesInstanceType:
     Type: String
-    Default: t3.medium
-    AllowedValues:
-      - t3.medium
+    Default: m5.xlarge
     ConstraintDescription: Must be a valid EC2 instance type
     Description: EC2 instance type for the node instances
   KeyPairName:
@@ -42,8 +40,14 @@ Parameters:
     Description: (Optional) Specify your own custom image ID. This value overrides any AWS Systems Manager Parameter Store value specified above.
   NodeImageIdSSMParam:
     Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
-    Default: /aws/service/eks/optimized-ami/1.24/amazon-linux-2/recommended/image_id
+    Default: /aws/service/eks/optimized-ami/1.28/amazon-linux-2/recommended/image_id
     Description: AWS Systems Manager Parametersub Store parameter of the AMI ID for the worker node instances. Change this value to match the version of Kubernetes you are using.
+  OutpostArn:
+    Type: String
+    Description: Outposts ARN
+  OutpostAZ:
+    Type: String
+    Description: Outposts Availability Zone
 Mappings:
   VpcIpRanges:
     Option1:
@@ -54,6 +58,8 @@ Mappings:
       AZPrivateSubnetB: 10.19.48.0/20
       LZPublicSubnet: 10.19.64.0/20
       LZPrivateSubnet: 10.19.80.0/20
+      OPPublicSubnet: 10.19.96.0/20
+      OPPrivateSubnet: 10.19.192.0/20
 Conditions:
   HasNodeImageId: !Not
     - "Fn::Equals":
@@ -162,6 +168,32 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-LZPrivateSubnet"
+  OPPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [ VpcIpRanges, Option1, OPPublicSubnet ]
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Ref OutpostAZ
+      OutpostArn: !Ref OutpostArn
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-OPPublicSubnet"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W33
+            reason: "Instances launched in this subnet receive a public IPv4 address by default should be permitted for the purpose of this sample project."
+  OPPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [ VpcIpRanges, Option1, OPPrivateSubnet ]
+      AvailabilityZone: !Ref OutpostAZ
+      OutpostArn: !Ref OutpostArn
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-OPPrivateSubnet"
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -264,11 +296,21 @@ Resources:
     Properties:
       SubnetId: !Ref LZPrivateSubnet
       RouteTableId: !Ref PrivateRouteTableB
+  OPPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OPPublicSubnet
+      RouteTableId: !Ref RouteTable
+  OPPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OPPrivateSubnet
+      RouteTableId: !Ref PrivateRouteTableB
   ControlPlane:
     Type: AWS::EKS::Cluster
     Properties:
       Name: !Ref EKSClusterName
-      Version: "1.24"
+      Version: "1.28"
       RoleArn: !GetAtt ControlPlaneRole.Arn
       ResourcesVpcConfig:
         SecurityGroupIds:
@@ -460,6 +502,12 @@ Outputs:
   LZPrivateSubnetId:
     Description: Local Zone Private Subnet in the VPC
     Value: !Ref LZPrivateSubnet 
+  OPPublicSubnetId:
+    Description: Outposts Public Subnet in the VPC
+    Value:  !Ref OPPublicSubnet 
+  OPPrivateSubnetId:
+    Description: Outposts Private Subnet in the VPC
+    Value: !Ref OPPrivateSubnet 
   VpcId:
     Description: The VPC Id
     Value: !Ref VPC

@@ -70,12 +70,12 @@ sudo mv /tmp/eksctl /usr/local/bin
 eksctl version
 
 # Install kubectl for the self-managed nodes at the Local Zones side.
-curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.23.13/2022-10-31/bin/linux/amd64/kubectl
+curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.11/2024-07-12/bin/linux/amd64/kubectl
 openssl sha1 -sha256 kubectl
 chmod +x ./kubectl
 mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH
 echo 'export PATH=$PATH:$HOME/bin' >~/.bash_profile
-kubectl version --short --client
+kubectl version --client
 
 # Install jq
 sudo yum install -y jq
