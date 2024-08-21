@@ -26,10 +26,11 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
-              - key: topology.kubernetes.io/zone
+              - key: game-zone
                 operator: NotIn
                 values:
-                - us-west-2-lax-1a
+                - op
+                - lz
       containers:
       - image: public.ecr.aws/l6m2t8p7/docker-2048:latest
         imagePullPolicy: Always
